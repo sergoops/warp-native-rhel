@@ -69,6 +69,14 @@ function msg {
                 "unknown_error") echo "Произошла неизвестная ошибка:" ;;
                 "config_generated") echo "Конфигурация wgcf успешно сгенерирована." ;;
                 "config_gen_failed") echo "Ошибка при генерации конфигурации wgcf." ;;
+                "warp_plus_prompt") echo "Если у вас есть WARP+ ключ, вы можете его применить." ;;
+                "enter_license") echo "Введите лицензионный ключ WARP+ (Enter - пропустить): " ;;
+                "applying_license") echo "Применение WARP+ лицензии..." ;;
+                "license_applied") echo "WARP+ лицензия успешно применена!" ;;
+                "license_failed") echo "Не удалось применить лицензию. Проверьте ключ." ;;
+                "continuing_free") echo "Продолжаем с бесплатной версией WARP." ;;
+                "skipping_license") echo "Пропускаем применение WARP+ лицензии." ;;
+                "config_regenerated") echo "Конфигурация перегенерирована с WARP+." ;;
                 "edit_config") echo "5. Редактирование конфигурации WARP..." ;;
                 "config_not_found") echo "не найден." ;;
                 "dns_removed") echo "Не удалось удалить строку DNS из конфигурации." ;;
@@ -91,6 +99,8 @@ function msg {
                 "handshake_failed") echo "Не удалось получить handshake в течении 10 секунд. Возможны проблемы с подключением." ;;
                 "cf_response") echo "Ответ от Cloudflare: warp=on" ;;
                 "cf_not_confirmed") echo "Cloudflare не подтвердил warp=on, но интерфейс работает. Это нормально." ;;
+                "warp_plus_active") echo "WARP+ активирован" ;;
+                "warp_free_active") echo "Используется бесплатная версия WARP" ;;
                 "enable_autostart") echo "9. Включение автозапуска WARP при старте..." ;;
                 "autostart_failed") echo "Не удалось настроить автозапуск." ;;
                 "autostart_enabled") echo "Автозапуск включен." ;;
@@ -103,6 +113,9 @@ function msg {
                 "disable_autostart") echo "Отключить автозапуск:" ;;
                 "enable_autostart_cmd") echo "Включить автозапуск:" ;;
                 "dns_restored") echo "DNS возвращены к заводскому состоянию (восстановлены из резервной копии)" ;;
+                "cf_response_plus") echo "Ответ от Cloudflare: warp=plus — WARP+ работает!" ;;
+                "recreating_account") echo "Обнаружен старый аккаунт. Для активации WARP+ пересоздаём аккаунт..." ;;
+                "old_account_removed") echo "Старый аккаунт удалён." ;;
                 *) echo "$key" ;;
             esac
             ;;
@@ -142,6 +155,14 @@ function msg {
                 "unknown_error") echo "Unknown error occurred:" ;;
                 "config_generated") echo "wgcf configuration successfully generated." ;;
                 "config_gen_failed") echo "Error generating wgcf configuration." ;;
+                "warp_plus_prompt") echo "If you have a WARP+ key, you can apply it now." ;;
+                "enter_license") echo "Enter WARP+ license key (Enter to skip): " ;;
+                "applying_license") echo "Applying WARP+ license..." ;;
+                "license_applied") echo "WARP+ license successfully applied!" ;;
+                "license_failed") echo "Failed to apply license. Check your key." ;;
+                "continuing_free") echo "Continuing with free WARP version." ;;
+                "skipping_license") echo "Skipping WARP+ license application." ;;
+                "config_regenerated") echo "Configuration regenerated with WARP+." ;;
                 "edit_config") echo "5. Editing WARP configuration..." ;;
                 "config_not_found") echo "not found." ;;
                 "dns_removed") echo "Failed to remove DNS line from configuration." ;;
@@ -164,6 +185,8 @@ function msg {
                 "handshake_failed") echo "Failed to get handshake within 10 seconds. Connection problems possible." ;;
                 "cf_response") echo "Cloudflare response: warp=on" ;;
                 "cf_not_confirmed") echo "Cloudflare did not confirm warp=on, but interface is working. This is normal." ;;
+                "warp_plus_active") echo "WARP+ activated" ;;
+                "warp_free_active") echo "Using free WARP version" ;;
                 "enable_autostart") echo "9. Enabling WARP autostart on boot..." ;;
                 "autostart_failed") echo "Failed to configure autostart." ;;
                 "autostart_enabled") echo "Autostart enabled." ;;
@@ -176,6 +199,9 @@ function msg {
                 "disable_autostart") echo "Disable autostart:" ;;
                 "enable_autostart_cmd") echo "Enable autostart:" ;;
                 "dns_restored") echo "DNS restored to factory state (restored from backup)" ;;
+                "cf_response_plus") echo "Cloudflare response: warp=plus — WARP+ is working!" ;;
+                "recreating_account") echo "Old account detected. Recreating account to activate WARP+..." ;;
+                "old_account_removed") echo "Old account removed." ;;
                 *) echo "$key" ;;
             esac
             ;;
@@ -223,6 +249,7 @@ fi
 select_language
 
 cd $HOME
+
 info "$(msg "start_install")"
 echo ""
 
@@ -261,7 +288,6 @@ WGCF_DOWNLOAD_URL="https://github.com/ViRb3/wgcf/releases/download/${WGCF_VERSIO
 WGCF_BINARY_NAME="wgcf_${WGCF_VERSION#v}_linux_${WGCF_ARCH}"
 
 wget -q "$WGCF_DOWNLOAD_URL" -O "$WGCF_BINARY_NAME" || error_exit "$(msg "wgcf_download_failed")"
-
 chmod +x "$WGCF_BINARY_NAME" || error_exit "$(msg "wgcf_chmod_failed")"
 mv "$WGCF_BINARY_NAME" /usr/local/bin/wgcf || error_exit "$(msg "wgcf_move_failed")"
 ok "wgcf $WGCF_VERSION $(msg "wgcf_installed")"
@@ -269,12 +295,22 @@ echo ""
 
 info "$(msg "register_wgcf")"
 
+echo ""
+info "$(msg "warp_plus_prompt")"
+read -p "$(msg "enter_license")" WARP_LICENSE
+
+if [[ -n "$WARP_LICENSE" && -f wgcf-account.toml ]]; then
+    warn "$(msg "recreating_account")"
+    rm -f wgcf-account.toml wgcf-profile.conf
+    ok "$(msg "old_account_removed")"
+fi
+
 if [[ -f wgcf-account.toml ]]; then
     info "$(msg "account_exists")"
 else
     info "$(msg "registering")"
-    
     info "$(msg "wgcf_binary_check")"
+    
     if ! wgcf --help &>/dev/null; then
         warn "$(msg "wgcf_not_executable")"
         chmod +x /usr/local/bin/wgcf
@@ -285,7 +321,7 @@ else
     
     output=$(timeout 60 bash -c 'yes | wgcf register' 2>&1)
     ret=$?
-
+    
     if [[ $ret -ne 0 ]]; then
         warn "$(msg "register_error") $ret."
         
@@ -309,19 +345,34 @@ else
         
         info "$(msg "trying_alternative")"
         echo | wgcf register &>/dev/null || true
-        
         sleep 2
     fi
-
+    
     if [[ ! -f wgcf-account.toml ]]; then
         error_exit "$(msg "registration_failed")"
     fi
-
+    
     info "$(msg "account_created")"
 fi
 
 wgcf generate &>/dev/null || error_exit "$(msg "config_gen_failed")"
 ok "$(msg "config_generated")"
+echo ""
+
+if [[ -n "$WARP_LICENSE" ]]; then
+    info "$(msg "applying_license")"
+    wgcf update --license-key "$WARP_LICENSE" &>/dev/null
+    if [[ $? -eq 0 ]]; then
+        ok "$(msg "license_applied")"
+        wgcf generate &>/dev/null || error_exit "$(msg "config_gen_failed")"
+        ok "$(msg "config_regenerated")"
+    else
+        warn "$(msg "license_failed")"
+        info "$(msg "continuing_free")"
+    fi
+else
+    info "$(msg "skipping_license")"
+fi
 echo ""
 
 info "$(msg "edit_config")"
@@ -393,10 +444,21 @@ fi
 
 curl_result=$(curl -s --interface warp https://www.cloudflare.com/cdn-cgi/trace | grep "warp=" | cut -d= -f2)
 
-if [[ "$curl_result" == "on" ]]; then
+if [[ "$curl_result" == "plus" ]]; then
+    ok "$(msg "cf_response_plus")"
+elif [[ "$curl_result" == "on" ]]; then
     ok "$(msg "cf_response")"
 else
     warn "$(msg "cf_not_confirmed")"
+fi
+
+if [[ -f wgcf-account.toml ]]; then
+    wgcf_account_type=$(grep -oP '(?<=account_type = ")[^"]*' wgcf-account.toml 2>/dev/null)
+    if [[ "$wgcf_account_type" == "plus" ]]; then
+        ok "$(msg "warp_plus_active")"
+    else
+        info "$(msg "warp_free_active")"
+    fi
 fi
 echo ""
 
@@ -406,6 +468,7 @@ ok "$(msg "autostart_enabled")"
 echo ""
 
 restore_dns
+
 ok "$(msg "installation_complete")"
 echo ""
 echo -e "\e[1;36m➤ $(msg "check_service"): \e[0msystemctl status wg-quick@warp"
