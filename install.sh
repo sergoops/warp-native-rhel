@@ -452,7 +452,7 @@ else
     warn "$(msg "cf_not_confirmed")"
 fi
 
-wgcf_account_type=$(wgcf status | grep -i "Account type" | awk -F': ' '{print $2}' | xargs)
+wgcf_account_type=$(wgcf status 2>/dev/null | grep -i "Account type" | awk -F': ' '{print $2}' | xargs)
 if [[ "$wgcf_account_type" == "unlimited" ]]; then
     ok "$(msg "warp_plus_active")"
 elif [[ -n "$wgcf_account_type" ]]; then
