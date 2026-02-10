@@ -452,13 +452,11 @@ else
     warn "$(msg "cf_not_confirmed")"
 fi
 
-if [[ -f wgcf-account.toml ]]; then
-    wgcf_account_type=$(grep -oP '(?<=account_type = ")[^"]*' wgcf-account.toml 2>/dev/null)
-    if [[ "$wgcf_account_type" == "plus" ]]; then
-        ok "$(msg "warp_plus_active")"
-    else
-        info "$(msg "warp_free_active")"
-    fi
+wgcf_account_type=$(wgcf status &>/dev/null | grep -i "Account type" | awk -F': ' '{print $2}' | xargs)
+if [[ "$wgcf_account_type" == "unlimited" ]]; then
+    ok "$(msg "warp_plus_active")"
+elif [[ -n "$wgcf_account_type" ]]; then
+    info "$(msg "warp_free_active")"
 fi
 echo ""
 
