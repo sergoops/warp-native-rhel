@@ -126,8 +126,6 @@ function msg {
                 "dnf_update_failed") echo "Не удалось обновить кэш пакетов (dnf)." ;;
                 "install_curl") echo "Установка curl..." ;;
                 "curl_failed") echo "Не удалось установить curl." ;;
-                "systemd_resolved_detected") echo "Обнаружен systemd-resolved. Используется альтернативное управление DNS." ;;
-                "systemd_resolved_dns_ok") echo "Временный DNS настроен через resolvectl." ;;
                 "systemd_resolved_dns_failed") echo "Не удалось настроить DNS через resolvectl." ;;
                 *) echo "$key" ;;
             esac
@@ -225,8 +223,6 @@ function msg {
                 "dnf_update_failed") echo "Failed to update package cache (dnf)." ;;
                 "install_curl") echo "Installing curl..." ;;
                 "curl_failed") echo "Failed to install curl." ;;
-                "systemd_resolved_detected") echo "systemd-resolved detected. Using alternative DNS management." ;;
-                "systemd_resolved_dns_ok") echo "Temporary DNS configured via resolvectl." ;;
                 "systemd_resolved_dns_failed") echo "Failed to configure DNS via resolvectl." ;;
                 *) echo "$key" ;;
             esac
@@ -255,15 +251,17 @@ function error_exit {
     exit 1
 }
 
+SYSTEMD_RESOLVED_WAS_ACTIVE=false
+
 RESTORE_DNS_REQUIRED=false
 
 function restore_dns {
     if [[ "$RESTORE_DNS_REQUIRED" == true ]]; then
-        if [[ "$SYSTEMD_RESOLVED_ACTIVE" == true ]]; then
-            resolvectl revert warp &>/dev/null || true
-        fi
         if [[ -f /etc/resolv.conf.backup ]]; then
             cp /etc/resolv.conf.backup /etc/resolv.conf
+        fi
+        if [[ "$SYSTEMD_RESOLVED_WAS_ACTIVE" == true ]]; then
+            systemctl start systemd-resolved &>/dev/null || true
         fi
         ok "$(msg "dns_restored")"
         RESTORE_DNS_REQUIRED=false
@@ -342,17 +340,14 @@ fi
 info "$(msg "temp_dns")"
 RESTORE_DNS_REQUIRED=true
 
-if [[ "$SYSTEMD_RESOLVED_ACTIVE" == true ]]; then
-    info "$(msg "systemd_resolved_detected")"
-    cp /etc/resolv.conf /etc/resolv.conf.backup
-    resolvectl dns warp 1.1.1.1 8.8.8.8 &>/dev/null || \
-        { echo -e "nameserver 1.1.1.1\nnameserver 8.8.8.8" > /etc/resolv.conf || error_exit "$(msg 'dns_failed')"; }
-    ok "$(msg "systemd_resolved_dns_ok")" || ok "$(msg "dns_ok")"
-else
-    cp /etc/resolv.conf /etc/resolv.conf.backup
-    echo -e "nameserver 1.1.1.1\nnameserver 8.8.8.8" > /etc/resolv.conf || error_exit "$(msg "dns_failed")"
-    ok "$(msg "dns_ok")"
+if systemctl is-active --quiet systemd-resolved 2>/dev/null; then
+    SYSTEMD_RESOLVED_WAS_ACTIVE=true
+    systemctl stop systemd-resolved &>/dev/null || true
 fi
+
+cp /etc/resolv.conf /etc/resolv.conf.backup
+echo -e "nameserver 1.1.1.1\nnameserver 8.8.8.8" > /etc/resolv.conf || error_exit "$(msg "dns_failed")"
+ok "$(msg "dns_ok")"
 echo ""
 
 info "$(msg "download_wgcf")"
