@@ -116,6 +116,19 @@ function msg {
                 "cf_response_plus") echo "Ответ от Cloudflare: warp=plus — WARP+ работает!" ;;
                 "recreating_account") echo "Обнаружен старый аккаунт. Для активации WARP+ пересоздаём аккаунт..." ;;
                 "old_account_removed") echo "Старый аккаунт удалён." ;;
+                "unsupported_distro") echo "Не удалось определить дистрибутив. Неподдерживаемая ОС." ;;
+                "install_epel") echo "Установка репозитория EPEL..." ;;
+                "epel_failed") echo "Не удалось установить репозиторий EPEL." ;;
+                "epel_ok") echo "Репозиторий EPEL установлен." ;;
+                "install_deps") echo "Установка зависимостей..." ;;
+                "deps_failed") echo "Не удалось установить зависимости." ;;
+                "deps_ok") echo "Зависимости установлены." ;;
+                "dnf_update_failed") echo "Не удалось обновить кэш пакетов (dnf)." ;;
+                "install_curl") echo "Установка curl..." ;;
+                "curl_failed") echo "Не удалось установить curl." ;;
+                "systemd_resolved_detected") echo "Обнаружен systemd-resolved. Используется альтернативное управление DNS." ;;
+                "systemd_resolved_dns_ok") echo "Временный DNS настроен через resolvectl." ;;
+                "systemd_resolved_dns_failed") echo "Не удалось настроить DNS через resolvectl." ;;
                 *) echo "$key" ;;
             esac
             ;;
@@ -202,6 +215,19 @@ function msg {
                 "cf_response_plus") echo "Cloudflare response: warp=plus — WARP+ is working!" ;;
                 "recreating_account") echo "Old account detected. Recreating account to activate WARP+..." ;;
                 "old_account_removed") echo "Old account removed." ;;
+                "unsupported_distro") echo "Cannot detect distribution. Unsupported OS." ;;
+                "install_epel") echo "Installing EPEL repository..." ;;
+                "epel_failed") echo "Failed to install EPEL repository." ;;
+                "epel_ok") echo "EPEL repository installed." ;;
+                "install_deps") echo "Installing dependencies..." ;;
+                "deps_failed") echo "Failed to install dependencies." ;;
+                "deps_ok") echo "Dependencies installed." ;;
+                "dnf_update_failed") echo "Failed to update package cache (dnf)." ;;
+                "install_curl") echo "Installing curl..." ;;
+                "curl_failed") echo "Failed to install curl." ;;
+                "systemd_resolved_detected") echo "systemd-resolved detected. Using alternative DNS management." ;;
+                "systemd_resolved_dns_ok") echo "Temporary DNS configured via resolvectl." ;;
+                "systemd_resolved_dns_failed") echo "Failed to configure DNS via resolvectl." ;;
                 *) echo "$key" ;;
             esac
             ;;
@@ -232,8 +258,13 @@ function error_exit {
 RESTORE_DNS_REQUIRED=false
 
 function restore_dns {
-    if [[ "$RESTORE_DNS_REQUIRED" == true && -f /etc/resolv.conf.backup ]]; then
-        cp /etc/resolv.conf.backup /etc/resolv.conf
+    if [[ "$RESTORE_DNS_REQUIRED" == true ]]; then
+        if [[ "$SYSTEMD_RESOLVED_ACTIVE" == true ]]; then
+            resolvectl revert warp &>/dev/null || true
+        fi
+        if [[ -f /etc/resolv.conf.backup ]]; then
+            cp /etc/resolv.conf.backup /etc/resolv.conf
+        fi
         ok "$(msg "dns_restored")"
         RESTORE_DNS_REQUIRED=false
     fi
@@ -246,6 +277,30 @@ if [[ $EUID -ne 0 ]]; then
     exit 1
 fi
 
+DISTRO_FAMILY=""
+DISTRO_ID=""
+
+function detect_distro {
+    if [[ -f /etc/os-release ]]; then
+        . /etc/os-release
+        DISTRO_ID="$ID"
+        case "$ID_LIKE" in
+            *rhel*|*fedora*|*centos*) DISTRO_FAMILY="rhel" ;;
+            *debian*|*ubuntu*) DISTRO_FAMILY="debian" ;;
+        esac
+        if [[ -z "$DISTRO_FAMILY" ]]; then
+            case "$ID" in
+                almalinux|rocky|centos|fedora|rhel|ol|almalinux-rhel) DISTRO_FAMILY="rhel" ;;
+                debian|ubuntu|linuxmint|pop) DISTRO_FAMILY="debian" ;;
+            esac
+        fi
+    else
+        error_exit "$(msg "unsupported_distro")"
+    fi
+}
+
+detect_distro
+
 select_language
 
 cd $HOME
@@ -254,16 +309,50 @@ info "$(msg "start_install")"
 echo ""
 
 info "$(msg "install_wireguard")"
-apt update -qq &>/dev/null || error_exit "$(msg "update_failed")"
-apt install wireguard -y &>/dev/null || error_exit "$(msg "wireguard_failed")"
-ok "$(msg "wireguard_ok")"
+
+if [[ "$DISTRO_FAMILY" == "rhel" ]]; then
+    dnf check-update --quiet &>/dev/null || error_exit "$(msg "dnf_update_failed")"
+    if ! dnf list available wireguard-tools --quiet &>/dev/null; then
+        info "$(msg "install_epel")"
+        dnf install epel-release -y &>/dev/null || error_exit "$(msg "epel_failed")"
+        ok "$(msg "epel_ok")"
+    fi
+    info "$(msg "install_deps")"
+    dnf install wireguard-tools -y &>/dev/null || error_exit "$(msg "wireguard_failed")"
+    ok "$(msg "wireguard_ok")"
+elif [[ "$DISTRO_FAMILY" == "debian" ]]; then
+    apt update -qq &>/dev/null || error_exit "$(msg "update_failed")"
+    apt install wireguard -y &>/dev/null || error_exit "$(msg "wireguard_failed")"
+    ok "$(msg "wireguard_ok")"
+else
+    error_exit "$(msg "unsupported_distro")"
+fi
 echo ""
 
+if ! command -v curl &>/dev/null; then
+    info "$(msg "install_curl")"
+    if [[ "$DISTRO_FAMILY" == "rhel" ]]; then
+        dnf install curl -y &>/dev/null || error_exit "$(msg "curl_failed")"
+    elif [[ "$DISTRO_FAMILY" == "debian" ]]; then
+        apt install curl -y &>/dev/null || error_exit "$(msg "curl_failed")"
+    fi
+    ok "$(msg "deps_ok")"
+fi
+
 info "$(msg "temp_dns")"
-cp /etc/resolv.conf /etc/resolv.conf.backup
 RESTORE_DNS_REQUIRED=true
-echo -e "nameserver 1.1.1.1\nnameserver 8.8.8.8" > /etc/resolv.conf || error_exit "$(msg "dns_failed")"
-ok "$(msg "dns_ok")"
+
+if [[ "$SYSTEMD_RESOLVED_ACTIVE" == true ]]; then
+    info "$(msg "systemd_resolved_detected")"
+    cp /etc/resolv.conf /etc/resolv.conf.backup
+    resolvectl dns warp 1.1.1.1 8.8.8.8 &>/dev/null || \
+        { echo -e "nameserver 1.1.1.1\nnameserver 8.8.8.8" > /etc/resolv.conf || error_exit "$(msg 'dns_failed')"; }
+    ok "$(msg "systemd_resolved_dns_ok")" || ok "$(msg "dns_ok")"
+else
+    cp /etc/resolv.conf /etc/resolv.conf.backup
+    echo -e "nameserver 1.1.1.1\nnameserver 8.8.8.8" > /etc/resolv.conf || error_exit "$(msg "dns_failed")"
+    ok "$(msg "dns_ok")"
+fi
 echo ""
 
 info "$(msg "download_wgcf")"
@@ -287,7 +376,7 @@ info "$(msg "arch_detected") $ARCH -> $WGCF_ARCH"
 WGCF_DOWNLOAD_URL="https://github.com/ViRb3/wgcf/releases/download/${WGCF_VERSION}/wgcf_${WGCF_VERSION#v}_linux_${WGCF_ARCH}"
 WGCF_BINARY_NAME="wgcf_${WGCF_VERSION#v}_linux_${WGCF_ARCH}"
 
-wget -q "$WGCF_DOWNLOAD_URL" -O "$WGCF_BINARY_NAME" || error_exit "$(msg "wgcf_download_failed")"
+curl -fsSL "$WGCF_DOWNLOAD_URL" -o "$WGCF_BINARY_NAME" || error_exit "$(msg "wgcf_download_failed")"
 chmod +x "$WGCF_BINARY_NAME" || error_exit "$(msg "wgcf_chmod_failed")"
 mv "$WGCF_BINARY_NAME" /usr/local/bin/wgcf || error_exit "$(msg "wgcf_move_failed")"
 ok "wgcf $WGCF_VERSION $(msg "wgcf_installed")"

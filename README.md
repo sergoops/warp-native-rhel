@@ -10,7 +10,7 @@
 
 This script installs Cloudflare WARP in "native" mode via `WireGuard` as an interface, without using `warp-cli`.
 
-⚠️ Only **Debian/Ubuntu** based systems are supported.
+⚠️ Supports **Debian/Ubuntu** and **RHEL-family** (AlmaLinux 10+, Rocky Linux, RHEL 8+, Fedora).
 
 It automates:
 - Installation of required packages
@@ -53,6 +53,19 @@ ansible-galaxy install themelbine.warp_native
     warp_native_state: present
     warp_native_modify_resolv: true
 ```
+
+## Supported Distributions
+
+| Distribution | Minimum Version | Package Manager | Notes |
+|-------------|----------------|-----------------|-------|
+| AlmaLinux | 9+ | dnf | EPEL needed on AL9, base repos on AL10+ |
+| Rocky Linux | 9+ | dnf | May require EPEL on older versions |
+| RHEL | 8+ | dnf | May require EPEL on older versions |
+| Fedora | 38+ | dnf | `wireguard-tools` in base repos |
+| Debian | 11+ | apt | `wireguard` meta-package |
+| Ubuntu | 22.04+ | apt | `wireguard` meta-package |
+
+> On RHEL 8/9 and older Rocky Linux, the script automatically installs EPEL if `wireguard-tools` is not available in enabled repos. AlmaLinux 10+ includes it in base repos.
 
 ## Xray Configuration Templates
 

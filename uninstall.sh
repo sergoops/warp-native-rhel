@@ -41,6 +41,8 @@ function msg {
                 "stopping_warp") echo "Отключаем интерфейс warp..." ;;
                 "removing_packages") echo "Удаляем пакеты wireguard..." ;;
                 "uninstall_complete") echo "Удаление завершено." ;;
+                "removing_packages_dnf") echo "Удаление пакета wireguard-tools (dnf)..." ;;
+                "removing_packages_apt") echo "Удаление пакета wireguard (apt)..." ;;
                 *) echo "$key" ;;
             esac
             ;;
@@ -50,6 +52,8 @@ function msg {
                 "stopping_warp") echo "Stopping warp interface..." ;;
                 "removing_packages") echo "Removing wireguard packages..." ;;
                 "uninstall_complete") echo "Uninstallation completed." ;;
+                "removing_packages_dnf") echo "Removing wireguard-tools package (dnf)..." ;;
+                "removing_packages_apt") echo "Removing wireguard package (apt)..." ;;
                 *) echo "$key" ;;
             esac
             ;;
@@ -87,8 +91,19 @@ rm -rf /etc/wireguard &>/dev/null
 rm -f /usr/local/bin/wgcf &>/dev/null
 rm -f wgcf-account.toml wgcf-profile.conf &>/dev/null
 
-info "$(msg "removing_packages")"
-DEBIAN_FRONTEND=noninteractive apt remove --purge -y wireguard &>/dev/null || true
-DEBIAN_FRONTEND=noninteractive apt autoremove -y &>/dev/null || true
+if [[ -f /etc/os-release ]]; then
+    . /etc/os-release
+    case "$ID_LIKE $ID" in
+        *rhel*|*fedora*|*centos*|almalinux|rocky|centos|fedora|rhel)
+            info "$(msg "removing_packages_dnf")"
+            dnf remove wireguard-tools -y &>/dev/null || true
+            ;;
+        *debian*|*ubuntu*|debian|ubuntu|linuxmint)
+            info "$(msg "removing_packages_apt")"
+            DEBIAN_FRONTEND=noninteractive apt remove --purge -y wireguard &>/dev/null || true
+            DEBIAN_FRONTEND=noninteractive apt autoremove -y &>/dev/null || true
+            ;;
+    esac
+fi
 
 completed "$(msg "uninstall_complete")"
