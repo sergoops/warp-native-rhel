@@ -531,7 +531,7 @@ if [[ -z "$handshake" || "$handshake" == "0 seconds ago" ]]; then
     warn "$(msg "handshake_failed")"
 fi
 
-curl_result=$(curl -s --interface warp https://www.cloudflare.com/cdn-cgi/trace | grep "warp=" | cut -d= -f2)
+curl_result=$(curl -s --interface warp --connect-timeout 10 --max-time 15 https://www.cloudflare.com/cdn-cgi/trace 2>/dev/null | grep "warp=" | cut -d= -f2)
 
 if [[ "$curl_result" == "plus" ]]; then
     ok "$(msg "cf_response_plus")"
