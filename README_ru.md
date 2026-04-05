@@ -29,29 +29,7 @@
 Установка на каждую нужную ноду:
 
 ```bash
-bash <(curl -fsSL https://raw.githubusercontent.com/distillium/warp-native/main/install.sh)
-```
-
-### Вариант 2: Ansible роль (рекомендуется для автоматизации)
-
-Для управления несколькими серверами используйте Ansible роль:
-
-**Установка из Ansible Galaxy:**
-```bash
-ansible-galaxy install themelbine.warp_native
-```
-
-**GitHub репозиторий:** [ansible-role-warp-native](https://github.com/TheMelbine/ansible-role-warp-native)
-
-**Пример playbook:**
-```yaml
-- hosts: warp_servers
-  become: yes
-  roles:
-    - themelbine.warp_native
-  vars:
-    warp_native_state: present
-    warp_native_modify_resolv: true
+bash <(curl -fsSL https://raw.githubusercontent.com/sergoops/warp-native-rhel/main/install.sh)
 ```
 
 ## Шаблоны для конфигурации Xray

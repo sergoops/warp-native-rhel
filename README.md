@@ -29,29 +29,7 @@ It automates:
 Install on each required node:
 
 ```bash
-bash <(curl -fsSL https://raw.githubusercontent.com/distillium/warp-native/main/install.sh)
-```
-
-### Option 2: Ansible Role (Recommended for automation)
-
-For managing multiple servers, use the Ansible role:
-
-**Install from Ansible Galaxy:**
-```bash
-ansible-galaxy install themelbine.warp_native
-```
-
-**GitHub Repository:** [ansible-role-warp-native](https://github.com/TheMelbine/ansible-role-warp-native)
-
-**Example playbook:**
-```yaml
-- hosts: warp_servers
-  become: yes
-  roles:
-    - themelbine.warp_native
-  vars:
-    warp_native_state: present
-    warp_native_modify_resolv: true
+bash <(curl -fsSL https://raw.githubusercontent.com/sergoops/warp-native-rhel/main/install.sh)
 ```
 
 ## Supported Distributions
